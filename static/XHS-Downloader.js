@@ -689,12 +689,46 @@ Discord Community: https://discord.com/invite/ZYtmgKud9Y
     };
 
     const extractName = () => {
-        let name = document.title.replace(/ - 小红书$/, "")
-                           .replace(/[^\u4e00-\u9fa5a-zA-Z0-9 ~!@#$%&()_\-+=\[\];"',.！（）【】：“”，。《》？]/g, "");
-        name = truncateString(name, 64,);
+        // 1. 保留原本的逻辑
+        let baseName = document.title.replace(/ - 小红书$/, "")
+                            .replace(/[^\u4e00-\u9fa5a-zA-Z0-9 ~!@#$%&()_\-+=\[\];"',.！（）【】：“”，。《》？]/g, "");
+        // 截断原标题，给作者和日期留空间
+        baseName = truncateString(baseName, 40);
+        // 2. 获取作者名（适配弹窗和详情页）
+        const getAuthor = () => {
+            const el = document.querySelector('.username') || document.querySelector('.author-info .name');
+            return el?.textContent.trim().replace(/[\\/:*?"<>|.\n\r]/g, '').substring(0, 15) || '未知';
+        };
+        // 3. 获取作品发布或最后编辑日期
+        const getPublishDate = () => {
+            try {
+                const dateEl = document.querySelector('.date');
+                if (!dateEl) return new Date().toISOString().slice(0, 10);
+                let text = dateEl.textContent.replace('编辑于', '').trim().split(' ')[0];
+                const now = new Date();
+                if (text.includes('天前')) {
+                    const days = parseInt(text) || 0;
+                    const d = new Date(); d.setDate(now.getDate() - days);
+                    return d.toISOString().slice(0, 10);
+                }
+                if (text.includes('昨天')) {
+                    const d = new Date(); d.setDate(now.getDate() - 1);
+                    return d.toISOString().slice(0, 10);
+                }
+                if (/^\d{2}-\d{2}$/.test(text)) return `${now.getFullYear()}-${text}`;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+            } catch (e) { return new Date().toISOString().slice(0, 10); }
+            return new Date().toISOString().slice(0, 10);
+        };
+        const author = getAuthor();
+        const date = getPublishDate();
+        // 4. 拼接逻辑：作者 + 原标题 + 日期
+        // 如果原逻辑没拿到标题（baseName为空），尝试用 URL 的 ID 兜底
         let match = currentUrl.match(/\/([0-9a-z]+?)\?/);
-        let id = match ? match[1] : null;
-        return name === "" ? id : name
+        let finalName = (baseName === "" ? (match ? match[1] : "未命名") : baseName);
+        // 最终格式：XHS_作者_原标题_日期
+        finalName = `XHS_${author}_${finalName}_${date}`;
+        return finalName.replace(/[\\/:*?"<>|]/g, ''); // 确保最终文件名合法
     };
 
     const downloadVideo = async (url, name) => {
